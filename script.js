@@ -47,24 +47,33 @@ class DialogueEditor {
     // 加载数据从服务器
     async loadDataFromServer() {
         try {
+            console.log('尝试从服务器加载数据...');
             const response = await fetch('/api/data');
+            console.log('服务器响应状态:', response.status, response.statusText);
+            
             if (response.ok) {
                 const result = await response.json();
+                console.log('服务器响应数据:', result);
                 if (result.success) {
                     this.scenes = result.data || [];
                     this.initializeIds();
                     this.renderScenes();
-                    console.log('数据从服务器加载成功');
+                    console.log('数据从服务器加载成功，场景数量:', this.scenes.length);
+                    this.showNotification('数据已从服务器加载', 'success');
                 } else {
                     console.error('服务器返回错误:', result.message);
+                    this.showNotification('服务器数据加载失败，使用本地数据', 'warning');
                     this.loadFromLocalStorage(); // 回退到本地存储
                 }
             } else {
-                console.error('无法连接到服务器，使用本地存储');
+                console.error('服务器响应错误:', response.status, response.statusText);
+                this.showNotification('无法连接到服务器，使用本地数据', 'warning');
                 this.loadFromLocalStorage();
             }
         } catch (error) {
-            console.error('加载数据时出错:', error);
+            console.error('加载数据时出错:', error.message);
+            console.error('错误详情:', error);
+            this.showNotification('网络错误，使用本地数据', 'warning');
             this.loadFromLocalStorage();
         }
     }
@@ -85,34 +94,58 @@ class DialogueEditor {
     async saveData() {
         // 总是保存到本地存储作为备份
         localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+        console.log('数据已保存到本地存储');
         
         // 如果在线，也保存到服务器
         if (this.isOnline) {
             try {
+                console.log('尝试保存数据到服务器...');
+                const requestData = { data: this.scenes };
+                console.log('发送的数据:', requestData);
+                
                 const response = await fetch('/api/data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ data: this.scenes })
+                    body: JSON.stringify(requestData)
                 });
+                
+                console.log('服务器响应状态:', response.status, response.statusText);
+                console.log('响应头:', Object.fromEntries(response.headers.entries()));
                 
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('服务器响应数据:', result);
                     if (result.success) {
-                        console.log('数据已同步到服务器');
+                        console.log('数据已成功同步到服务器');
                         this.showNotification('数据已保存并同步', 'success');
                     } else {
                         console.error('服务器保存失败:', result.message);
-                        this.showNotification('数据已本地保存，但服务器同步失败', 'warning');
+                        this.showNotification(`服务器同步失败: ${result.message}`, 'warning');
                     }
                 } else {
-                    console.error('服务器响应错误:', response.status);
-                    this.showNotification('数据已本地保存，但服务器同步失败', 'warning');
+                    // 尝试读取错误响应内容
+                    let errorText = '';
+                    try {
+                        errorText = await response.text();
+                        console.error('服务器错误响应内容:', errorText);
+                    } catch (e) {
+                        console.error('无法读取错误响应内容');
+                    }
+                    console.error('服务器响应错误:', response.status, response.statusText);
+                    this.showNotification(`服务器同步失败 (${response.status}): ${response.statusText}`, 'warning');
                 }
             } catch (error) {
-                console.error('保存到服务器时出错:', error);
-                this.showNotification('数据已本地保存，但服务器同步失败', 'warning');
+                console.error('保存到服务器时出错:', error.message);
+                console.error('错误详情:', error);
+                
+                // 检查是否是网络错误
+                if (error instanceof TypeError && error.message.includes('fetch')) {
+                    this.showNotification('网络连接失败，数据已本地保存', 'warning');
+                } else {
+                    this.showNotification(`服务器同步失败: ${error.message}`, 'warning');
+                }
             }
         } else {
             this.showNotification('离线模式：数据已本地保存', 'info');
