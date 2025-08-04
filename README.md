@@ -38,6 +38,8 @@
 
 ## 部署说明
 
+github地址：<https://github.com/09okjk/dialogue-editor.git>
+
 ### Ubuntu系统部署
 
 #### 方法1: 使用Python服务器（推荐）
