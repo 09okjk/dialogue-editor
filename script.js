@@ -1,16 +1,16 @@
 // 全局状态管理
 class DialogueEditor {
     constructor() {
-        this.scenes = JSON.parse(localStorage.getItem('dialogueScenes')) || [];
+        this.scenes = [];
         this.currentSceneId = null;
         this.currentDialogueId = null;
         this.nextSceneId = 1;
         this.nextDialogueId = 1;
         this.nextNodeId = 1;
+        this.isLoading = false;
         
-        this.initializeIds();
         this.initializeEventListeners();
-        this.renderScenes();
+        this.loadDataFromServer();
     }
     
     // 初始化ID计数器
@@ -34,9 +34,73 @@ class DialogueEditor {
         this.nextNodeId = maxNodeId + 1;
     }
     
-    // 保存数据到本地存储
-    saveData() {
-        localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+    // 从服务器加载数据
+    async loadDataFromServer() {
+        try {
+            this.isLoading = true;
+            const response = await fetch('/api/data');
+            if (response.ok) {
+                this.scenes = await response.json();
+                this.initializeIds();
+                this.renderScenes();
+                console.log('数据已从服务器加载');
+            } else {
+                console.error('从服务器加载数据失败:', response.statusText);
+                // 如果服务器加载失败，尝试从localStorage加载作为备用
+                this.loadFromLocalStorage();
+            }
+        } catch (error) {
+            console.error('连接服务器失败:', error);
+            // 如果网络错误，尝试从localStorage加载作为备用
+            this.loadFromLocalStorage();
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    // 备用：从本地存储加载数据
+    loadFromLocalStorage() {
+        const localData = localStorage.getItem('dialogueScenes');
+        if (localData) {
+            this.scenes = JSON.parse(localData);
+            this.initializeIds();
+            this.renderScenes();
+            console.log('数据已从本地存储加载（备用方案）');
+        } else {
+            this.scenes = [];
+            this.initializeIds();
+            this.renderScenes();
+        }
+    }
+
+    // 保存数据到服务器
+    async saveData() {
+        if (this.isLoading) return;
+        
+        try {
+            const response = await fetch('/api/data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(this.scenes)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('数据已保存到服务器:', result.message);
+                // 同时保存到localStorage作为备用
+                localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+            } else {
+                console.error('保存到服务器失败:', response.statusText);
+                // 如果服务器保存失败，至少保存到localStorage
+                localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+            }
+        } catch (error) {
+            console.error('连接服务器失败:', error);
+            // 如果网络错误，至少保存到localStorage
+            localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+        }
     }
     
     // 初始化事件监听器
