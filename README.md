@@ -44,25 +44,25 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 
 #### 方法1: 使用Python服务器（推荐）
 
-1. 确保系统安装了Python 3:
+1. 确保系统安装了Python 3：
 
     ```bash
     python3 --version
     ```
 
-2. 进入项目目录:
+2. 进入项目目录：
 
     ```bash
     cd /path/to/dialogue-editor
     ```
 
-3. 启动服务器:
+3. 启动服务器：
 
     ```bash
     python3 server.py
     ```
 
-4. 在浏览器中访问:
+4. 在浏览器中访问：
 
     ```bash
     http://localhost:8080
@@ -87,9 +87,9 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 
     [Service]
     Type=simple
-    User=www-data
-    WorkingDirectory=/path/to/dialogue-editor
-    ExecStart=/usr/bin/python3 /path/to/dialogue-editor/server.py
+    User=lighthouse
+    WorkingDirectory=/home/lighthouse/Program/dialogue-editor
+    ExecStart=/usr/bin/python3 /home/lighthouse/Program/dialogue-editor/server.py 8080 0.0.0.0
     Restart=always
     RestartSec=10
 
@@ -128,7 +128,14 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 2. 使用nohup后台运行：
 
     ```bash
+    # 默认端口8080，仅本地访问
     nohup python3 server.py > dialogue-editor.log 2>&1 &
+    
+    # 自定义端口9000，仅本地访问
+    nohup python3 server.py 9000 > dialogue-editor.log 2>&1 &
+    
+    # 端口8080，允许公网访问（注意安全风险）
+    nohup python3 server.py 8080 0.0.0.0 > dialogue-editor.log 2>&1 &
     ```
 
 3. 查看进程ID：
@@ -151,20 +158,20 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 
 #### 方法2: 使用Node.js服务器
 
-1. 安装Node.js:
+1. 安装Node.js：
 
     ```bash
     sudo apt update
     sudo apt install nodejs npm
     ```
 
-2. 安装http-server:
+2. 安装http-server：
 
     ```bash
     npm install -g http-server
     ```
 
-3. 在项目目录启动服务器:
+3. 在项目目录启动服务器：
 
     ```bash
     http-server -p 8080
@@ -211,27 +218,27 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 
 #### 方法3: 使用Nginx
 
-1. 安装Nginx:
+1. 安装Nginx：
 
     ```bash
     sudo apt update
     sudo apt install nginx
     ```
 
-2. 将项目文件复制到Nginx目录:
+2. 将项目文件复制到Nginx目录：
 
     ```bash
     sudo cp -r /path/to/dialogue-editor/* /var/www/html/
     ```
 
-3. 启动Nginx:
+3. 启动Nginx：
 
     ```bash
     sudo systemctl start nginx
     sudo systemctl enable nginx
     ```
 
-4. 访问:
+4. 访问：
 
     ```bash
     http://your-server-ip
@@ -241,7 +248,7 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 
 #### 方法1: 直接运行
 
-1. 双击运行 `server.py` 或在命令行中执行:
+1. 双击运行 `server.py` 或在命令行中执行：
 
     ```cmd
     python server.py
@@ -294,6 +301,74 @@ github地址：<https://github.com/09okjk/dialogue-editor.git>
 7. 添加参数：`server.py`
 8. 起始于：`C:\path\to\dialogue-editor`
 9. 完成创建并启动任务
+
+### 端口配置和公网访问
+
+#### 端口配置
+
+默认情况下，服务器运行在端口 `8080`。你可以通过以下方式修改端口：
+
+```bash
+# 使用自定义端口
+python3 server.py 9000
+
+# 在systemd服务中修改端口
+# 编辑 /etc/systemd/system/dialogue-editor.service
+ExecStart=/usr/bin/python3 /path/to/dialogue-editor/server.py 9000
+
+# 在nohup中使用自定义端口
+nohup python3 server.py 9000 > dialogue-editor.log 2>&1 &
+```
+
+#### 公网访问配置
+
+默认情况下，服务器只允许本地访问（127.0.0.1）。要允许公网访问，需要：
+
+1. **启用公网绑定**：
+
+   ```bash
+   python3 server.py 8080 0.0.0.0
+   ```
+
+2. **配置防火墙**（Ubuntu）：
+
+   ```bash
+   # 允许特定端口
+   sudo ufw allow 8080
+   
+   # 或者只允许特定IP访问
+   sudo ufw allow from YOUR_IP_ADDRESS to any port 8080
+   ```
+
+3. **云服务器安全组**：
+   - 如果使用阿里云、腾讯云等，需要在控制台配置安全组规则
+   - 开放对应端口（如8080）的入站规则
+
+#### 安全建议
+
+- ⚠️ **生产环境不建议直接暴露Python服务器到公网**
+- 建议使用Nginx作为反向代理
+- 配置SSL证书启用HTTPS
+- 限制访问IP范围
+- 定期更新和备份
+
+#### 反向代理配置（推荐）
+
+使用Nginx作为反向代理的配置示例：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
 
 ## 使用指南
 
