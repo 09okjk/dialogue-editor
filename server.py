@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-对话编辑器服务器，支持数据同步
-适用于Ubuntu系统部署
+对话编辑器服务器 - 支持SQLite数据库同步
+适用于跨设备数据同步的对话编辑器部署
 
 使用方法：
   python3 server.py                    # 默认端口8080，仅本地访问
@@ -15,8 +15,10 @@ import socketserver
 import os
 import sys
 import json
+import sqlite3
 import urllib.parse
 from pathlib import Path
+from datetime import datetime
 
 # 默认配置
 DEFAULT_PORT = 8080
@@ -24,10 +26,66 @@ DEFAULT_HOST = "127.0.0.1"  # 仅本地访问
 
 # 获取当前脚本所在目录
 DIRECTORY = Path(__file__).parent
-DATA_FILE = DIRECTORY / "dialogue_data.json"
+DB_PATH = DIRECTORY / "dialogue_data.db"
 
-class DialogueServerHandler(http.server.SimpleHTTPRequestHandler):
+class DatabaseManager:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.init_database()
+    
+    def init_database(self):
+        """初始化数据库表"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 创建数据表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS dialogue_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # 检查是否有数据，如果没有则插入默认空数据
+        cursor.execute('SELECT COUNT(*) FROM dialogue_data')
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('INSERT INTO dialogue_data (data) VALUES (?)', ('[]',))
+        
+        conn.commit()
+        conn.close()
+    
+    def get_data(self):
+        """获取最新的对话数据"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT data FROM dialogue_data ORDER BY updated_at DESC LIMIT 1')
+        result = cursor.fetchone()
+        
+        conn.close()
+        
+        if result:
+            return json.loads(result[0])
+        return []
+    
+    def save_data(self, data):
+        """保存对话数据"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # 删除旧数据，保存新数据
+        cursor.execute('DELETE FROM dialogue_data')
+        cursor.execute('INSERT INTO dialogue_data (data) VALUES (?)', (json.dumps(data),))
+        
+        conn.commit()
+        conn.close()
+        
+        return True
+
+class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
+        self.db_manager = DatabaseManager(DB_PATH)
         super().__init__(*args, directory=DIRECTORY, **kwargs)
     
     def end_headers(self):
@@ -51,57 +109,62 @@ class DialogueServerHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
     
     def do_POST(self):
-        # 处理API请求
+        # 处理API POST请求
         if self.path == '/api/data':
             self.handle_save_data()
         else:
             self.send_error(404, "Not Found")
     
     def handle_get_data(self):
-        """处理获取数据请求"""
+        """处理获取数据的API请求"""
         try:
-            if DATA_FILE.exists():
-                with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            else:
-                data = []
+            data = self.db_manager.get_data()
             
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+            
+            response = {
+                'success': True,
+                'data': data,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
             
         except Exception as e:
-            print(f"获取数据时发生错误: {e}")
-            self.send_error(500, f"Internal Server Error: {str(e)}")
+            self.send_error(500, f"Database error: {str(e)}")
     
     def handle_save_data(self):
-        """处理保存数据请求"""
+        """处理保存数据的API请求"""
         try:
             # 读取POST数据
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             
             # 解析JSON数据
-            data = json.loads(post_data.decode('utf-8'))
+            request_data = json.loads(post_data.decode('utf-8'))
+            scenes_data = request_data.get('data', [])
             
-            # 保存到文件
-            with open(DATA_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            # 保存到数据库
+            success = self.db_manager.save_data(scenes_data)
             
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"success": True, "message": "数据保存成功"}, ensure_ascii=False).encode('utf-8'))
             
-            print(f"数据已保存到: {DATA_FILE}")
+            response = {
+                'success': success,
+                'message': 'Data saved successfully' if success else 'Failed to save data',
+                'timestamp': datetime.now().isoformat()
+            }
             
-        except json.JSONDecodeError as e:
-            print(f"JSON解析错误: {e}")
-            self.send_error(400, f"Bad Request: Invalid JSON - {str(e)}")
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            
+        except json.JSONDecodeError:
+            self.send_error(400, "Invalid JSON data")
         except Exception as e:
-            print(f"保存数据时发生错误: {e}")
-            self.send_error(500, f"Internal Server Error: {str(e)}")
+            self.send_error(500, f"Database error: {str(e)}")
 
 def parse_arguments():
     """解析命令行参数"""
@@ -132,7 +195,7 @@ def main():
         os.chdir(DIRECTORY)
         
         # 创建服务器
-        with socketserver.TCPServer((host, port), DialogueServerHandler) as httpd:
+        with socketserver.TCPServer((host, port), CustomHTTPRequestHandler) as httpd:
             print(f"对话编辑器服务器启动成功!")
             print(f"服务目录: {DIRECTORY}")
             

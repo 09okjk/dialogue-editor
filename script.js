@@ -7,7 +7,17 @@ class DialogueEditor {
         this.nextSceneId = 1;
         this.nextDialogueId = 1;
         this.nextNodeId = 1;
-        this.isLoading = false;
+        this.isOnline = navigator.onLine;
+        
+        // 监听网络状态变化
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            this.syncWithServer();
+        });
+        
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+        });
         
         this.initializeEventListeners();
         this.loadDataFromServer();
@@ -34,72 +44,109 @@ class DialogueEditor {
         this.nextNodeId = maxNodeId + 1;
     }
     
-    // 从服务器加载数据
+    // 加载数据从服务器
     async loadDataFromServer() {
         try {
-            this.isLoading = true;
             const response = await fetch('/api/data');
             if (response.ok) {
-                this.scenes = await response.json();
-                this.initializeIds();
-                this.renderScenes();
-                console.log('数据已从服务器加载');
+                const result = await response.json();
+                if (result.success) {
+                    this.scenes = result.data || [];
+                    this.initializeIds();
+                    this.renderScenes();
+                    console.log('数据从服务器加载成功');
+                } else {
+                    console.error('服务器返回错误:', result.message);
+                    this.loadFromLocalStorage(); // 回退到本地存储
+                }
             } else {
-                console.error('从服务器加载数据失败:', response.statusText);
-                // 如果服务器加载失败，尝试从localStorage加载作为备用
+                console.error('无法连接到服务器，使用本地存储');
                 this.loadFromLocalStorage();
             }
         } catch (error) {
-            console.error('连接服务器失败:', error);
-            // 如果网络错误，尝试从localStorage加载作为备用
+            console.error('加载数据时出错:', error);
             this.loadFromLocalStorage();
-        } finally {
-            this.isLoading = false;
         }
     }
-
-    // 备用：从本地存储加载数据
+    
+    // 从本地存储加载数据（离线模式或服务器不可用时的回退方案）
     loadFromLocalStorage() {
         const localData = localStorage.getItem('dialogueScenes');
         if (localData) {
             this.scenes = JSON.parse(localData);
-            this.initializeIds();
-            this.renderScenes();
-            console.log('数据已从本地存储加载（备用方案）');
         } else {
             this.scenes = [];
-            this.initializeIds();
-            this.renderScenes();
         }
+        this.initializeIds();
+        this.renderScenes();
     }
-
+    
     // 保存数据到服务器
     async saveData() {
-        if (this.isLoading) return;
+        // 总是保存到本地存储作为备份
+        localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+        
+        // 如果在线，也保存到服务器
+        if (this.isOnline) {
+            try {
+                const response = await fetch('/api/data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ data: this.scenes })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        console.log('数据已同步到服务器');
+                        this.showNotification('数据已保存并同步', 'success');
+                    } else {
+                        console.error('服务器保存失败:', result.message);
+                        this.showNotification('数据已本地保存，但服务器同步失败', 'warning');
+                    }
+                } else {
+                    console.error('服务器响应错误:', response.status);
+                    this.showNotification('数据已本地保存，但服务器同步失败', 'warning');
+                }
+            } catch (error) {
+                console.error('保存到服务器时出错:', error);
+                this.showNotification('数据已本地保存，但服务器同步失败', 'warning');
+            }
+        } else {
+            this.showNotification('离线模式：数据已本地保存', 'info');
+        }
+    }
+    
+    // 与服务器同步数据
+    async syncWithServer() {
+        if (!this.isOnline) return;
         
         try {
-            const response = await fetch('/api/data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(this.scenes)
-            });
-            
+            // 获取服务器数据
+            const response = await fetch('/api/data');
             if (response.ok) {
                 const result = await response.json();
-                console.log('数据已保存到服务器:', result.message);
-                // 同时保存到localStorage作为备用
-                localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
-            } else {
-                console.error('保存到服务器失败:', response.statusText);
-                // 如果服务器保存失败，至少保存到localStorage
-                localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+                if (result.success) {
+                    const serverData = result.data || [];
+                    const localData = JSON.parse(localStorage.getItem('dialogueScenes') || '[]');
+                    
+                    // 简单的同步策略：如果本地有数据且服务器为空，上传本地数据
+                    // 否则使用服务器数据
+                    if (localData.length > 0 && serverData.length === 0) {
+                        await this.saveData(); // 上传本地数据到服务器
+                    } else if (serverData.length > 0) {
+                        this.scenes = serverData;
+                        this.initializeIds();
+                        this.renderScenes();
+                        localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+                        this.showNotification('数据已从服务器同步', 'success');
+                    }
+                }
             }
         } catch (error) {
-            console.error('连接服务器失败:', error);
-            // 如果网络错误，至少保存到localStorage
-            localStorage.setItem('dialogueScenes', JSON.stringify(this.scenes));
+            console.error('同步数据时出错:', error);
         }
     }
     
@@ -819,10 +866,65 @@ class DialogueEditor {
         }
     }
     
+    // 显示通知消息
+    showNotification(message, type = 'info') {
+        // 创建通知元素
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        // 添加样式
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            max-width: 300px;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+        `;
+        
+        // 根据类型设置背景色
+        switch(type) {
+            case 'success':
+                notification.style.backgroundColor = '#4CAF50';
+                break;
+            case 'warning':
+                notification.style.backgroundColor = '#FF9800';
+                break;
+            case 'error':
+                notification.style.backgroundColor = '#F44336';
+                break;
+            default:
+                notification.style.backgroundColor = '#2196F3';
+        }
+        
+        // 添加到页面
+        document.body.appendChild(notification);
+        
+        // 3秒后自动移除
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 3000);
+    }
+    
     // 保存当前对话
     saveCurrentDialogue() {
         this.saveData();
-        alert('对话已保存');
+        // 移除原来的alert，通知系统会处理消息显示
     }
     
     // 导出单个场景
