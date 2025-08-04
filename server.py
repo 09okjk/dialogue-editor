@@ -26,7 +26,27 @@ DEFAULT_HOST = "127.0.0.1"  # 仅本地访问
 
 # 获取当前脚本所在目录
 DIRECTORY = Path(__file__).parent
-DB_PATH = DIRECTORY / "dialogue_data.db"
+
+# 数据库路径 - 优先使用用户主目录，避免权限问题
+def get_database_path():
+    """获取数据库路径，优先使用用户主目录"""
+    # 尝试使用用户主目录
+    home_dir = Path.home()
+    db_dir = home_dir / ".dialogue-editor"
+    
+    # 如果主目录可写，使用主目录
+    try:
+        db_dir.mkdir(exist_ok=True)
+        test_file = db_dir / "test_write.tmp"
+        test_file.touch()
+        test_file.unlink()
+        print(f"使用用户主目录存储数据库: {db_dir}")
+        return db_dir / "dialogue_data.db"
+    except (OSError, PermissionError):
+        print("用户主目录不可写，使用项目目录")
+        return DIRECTORY / "dialogue_data.db"
+
+DB_PATH = get_database_path()
 
 class DatabaseManager:
     def __init__(self, db_path):
