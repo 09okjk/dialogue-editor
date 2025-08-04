@@ -31,29 +31,82 @@ DB_PATH = DIRECTORY / "dialogue_data.db"
 class DatabaseManager:
     def __init__(self, db_path):
         self.db_path = db_path
+        self.ensure_database_permissions()
         self.init_database()
+    
+    def ensure_database_permissions(self):
+        """确保数据库文件和目录有正确的权限"""
+        import stat
+        
+        # 确保数据库所在目录存在且可写
+        db_dir = self.db_path.parent
+        if not db_dir.exists():
+            db_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 设置目录权限（读写执行）
+        try:
+            os.chmod(db_dir, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+        except (OSError, PermissionError) as e:
+            print(f"警告: 无法设置目录权限: {e}")
+        
+        # 如果数据库文件已存在，设置文件权限
+        if self.db_path.exists():
+            try:
+                os.chmod(self.db_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)
+            except (OSError, PermissionError) as e:
+                print(f"警告: 无法设置数据库文件权限: {e}")
     
     def init_database(self):
         """初始化数据库表"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # 创建数据表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS dialogue_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                data TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # 检查是否有数据，如果没有则插入默认空数据
-        cursor.execute('SELECT COUNT(*) FROM dialogue_data')
-        if cursor.fetchone()[0] == 0:
-            cursor.execute('INSERT INTO dialogue_data (data) VALUES (?)', ('[]',))
-        
-        conn.commit()
-        conn.close()
+        try:
+            # 使用绝对路径并检查权限
+            print(f"初始化数据库: {self.db_path}")
+            print(f"数据库文件是否存在: {self.db_path.exists()}")
+            
+            if self.db_path.exists():
+                # 检查文件权限
+                file_stat = self.db_path.stat()
+                print(f"数据库文件权限: {oct(file_stat.st_mode)}")
+                print(f"文件所有者: UID={file_stat.st_uid}, GID={file_stat.st_gid}")
+            
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
+            
+            # 创建数据表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS dialogue_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    data TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # 检查是否有数据，如果没有则插入默认空数据
+            cursor.execute('SELECT COUNT(*) FROM dialogue_data')
+            if cursor.fetchone()[0] == 0:
+                cursor.execute('INSERT INTO dialogue_data (data) VALUES (?)', ('[]',))
+                print("已初始化默认数据")
+            
+            conn.commit()
+            conn.close()
+            
+            # 初始化后再次设置文件权限
+            if self.db_path.exists():
+                try:
+                    import stat
+                    os.chmod(self.db_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)
+                    print(f"数据库文件权限已设置")
+                except (OSError, PermissionError) as e:
+                    print(f"警告: 无法设置数据库文件权限: {e}")
+            
+            print("数据库初始化成功")
+            
+        except sqlite3.Error as e:
+            print(f"数据库初始化错误: {e}")
+            raise
+        except Exception as e:
+            print(f"初始化数据库时发生错误: {e}")
+            raise
     
     def get_data(self):
         """获取最新的对话数据"""
