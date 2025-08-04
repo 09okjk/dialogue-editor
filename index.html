@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>对话编辑器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 主页面 - 场景管理 -->
+        <div id="main-page" class="page active">
+            <header class="header">
+                <h1>对话编辑器</h1>
+                <div class="header-actions">
+                    <button id="export-single-btn" class="btn btn-secondary" disabled>导出选中场景</button>
+                    <button id="export-all-btn" class="btn btn-primary">导出所有场景</button>
+                </div>
+            </header>
+            
+            <div class="main-content">
+                <!-- 左侧场景列表 -->
+                <div class="sidebar">
+                    <div class="sidebar-header">
+                        <h2>场景列表</h2>
+                        <button id="new-scene-btn" class="btn btn-primary">新建场景</button>
+                    </div>
+                    <div id="scene-list" class="scene-list">
+                        <div class="empty-state">
+                            <p>暂无场景，点击"新建场景"开始创建</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧对话列表 -->
+                <div class="content-area">
+                    <div id="dialogue-section" class="dialogue-section">
+                        <div class="section-header">
+                            <h2 id="current-scene-title">请选择一个场景</h2>
+                            <button id="new-dialogue-btn" class="btn btn-primary" disabled>新建对话</button>
+                        </div>
+                        <div id="dialogue-list" class="dialogue-list">
+                            <div class="empty-state">
+                                <p>请先选择一个场景查看对话</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 对话编辑页面 -->
+        <div id="edit-page" class="page">
+            <header class="header">
+                <button id="back-btn" class="btn btn-secondary">← 返回</button>
+                <h1 id="edit-dialogue-title">编辑对话</h1>
+                <div class="header-actions">
+                    <button id="save-dialogue-btn" class="btn btn-primary">保存对话</button>
+                </div>
+            </header>
+            
+            <div class="edit-content">
+                <div class="edit-header">
+                    <h2>对话节点</h2>
+                    <div class="edit-actions">
+                        <button id="toggle-all-nodes-btn" class="btn btn-secondary">全部收起</button>
+                        <button id="add-node-btn" class="btn btn-primary">添加节点</button>
+                    </div>
+                </div>
+                <div id="nodes-container" class="nodes-container">
+                    <!-- 节点将在这里动态生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 模态框 -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">标题</h3>
+                <button id="modal-close" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn btn-secondary">取消</button>
+                <button id="modal-confirm" class="btn btn-primary">确认</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
