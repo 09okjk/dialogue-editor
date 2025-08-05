@@ -326,7 +326,7 @@ class DialogueEditor {
             state: 2, // WithOutStart
             currentNodeID: defaultNode.nodeID,
             conditions: {
-                requiredCount: 1,
+                requiredCount: 0,
                 conditions: []
             },
             nodes: [defaultNode]
