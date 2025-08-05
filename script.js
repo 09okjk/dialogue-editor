@@ -254,12 +254,14 @@ class DialogueEditor {
         this.currentSceneId = sceneId;
         const scene = this.scenes.find(s => s.id === sceneId);
         
-        document.getElementById('current-scene-title').textContent = scene.name;
-        document.getElementById('new-dialogue-btn').disabled = false;
-        document.getElementById('export-single-btn').disabled = false;
-        
-        this.renderScenes();
-        this.renderDialogues();
+        if (scene) {
+            document.getElementById('current-scene-title').textContent = scene.name;
+            document.getElementById('new-dialogue-btn').disabled = false;
+            document.getElementById('export-scene-dialogues-btn').disabled = false;
+            
+            this.renderScenes();
+            this.renderDialogues();
+        }
     }
     
     // 显示重命名场景模态框
@@ -363,7 +365,7 @@ class DialogueEditor {
             return;
         }
         const scene = this.scenes.find(s => s.id === this.currentSceneId);
-        if (scene.dialogues.length === 0) {
+        if (!scene || scene.dialogues.length === 0) {
             dialogueList.innerHTML = `<div class="empty-state"><p>该场景暂无对话，点击"新建对话"开始创建</p></div>`;
             return;
         }
@@ -655,10 +657,11 @@ class DialogueEditor {
     // 添加选择项
     addChoice(nodeId) {
         const scene = this.scenes.find(s => s.id === this.currentSceneId);
-        const dialogue = scene.dialogues.find(d => d.id === this.currentDialogueId);
-        const node = dialogue.nodes.find(n => n.id === nodeId);
+        const dialogue = scene.dialogues.find(d => d.dialogueID === this.currentDialogueId);
+        const node = dialogue.nodes.find(n => n.internalId == nodeId);
         
         if (node) {
+            if (!node.choices) node.choices = [];
             node.choices.push({
                 text: '',
                 nextNodeID: ''
@@ -670,10 +673,10 @@ class DialogueEditor {
     // 更新选择项
     updateChoice(nodeId, choiceIndex, field, value) {
         const scene = this.scenes.find(s => s.id === this.currentSceneId);
-        const dialogue = scene.dialogues.find(d => d.id === this.currentDialogueId);
-        const node = dialogue.nodes.find(n => n.id === nodeId);
+        const dialogue = scene.dialogues.find(d => d.dialogueID === this.currentDialogueId);
+        const node = dialogue.nodes.find(n => n.internalId == nodeId);
         
-        if (node && node.choices[choiceIndex]) {
+        if (node && node.choices && node.choices[choiceIndex]) {
             node.choices[choiceIndex][field] = value;
         }
     }
@@ -681,19 +684,20 @@ class DialogueEditor {
     // 删除选择项
     removeChoice(nodeId, choiceIndex) {
         const scene = this.scenes.find(s => s.id === this.currentSceneId);
-        const dialogue = scene.dialogues.find(d => d.id === this.currentDialogueId);
-        const node = dialogue.nodes.find(n => n.id === nodeId);
+        const dialogue = scene.dialogues.find(d => d.dialogueID === this.currentDialogueId);
+        const node = dialogue.nodes.find(n => n.internalId == nodeId);
         
-        if (node && node.choices[choiceIndex]) {
+        if (node && node.choices && node.choices[choiceIndex]) {
             node.choices.splice(choiceIndex, 1);
             this.renderNodes(dialogue.nodes);
         }
     }
     
     // 切换节点展开/收起状态
-    toggleNode(nodeId) {
-        const nodeContent = document.querySelector(`.node-content[data-node-id="${nodeId}"]`);
-        const toggleIcon = document.querySelector(`.btn-toggle-node[data-node-id="${nodeId}"] .toggle-icon`);
+    toggleNode(toggleButton) {
+        const nodeItem = toggleButton.closest('.node-item');
+        const nodeContent = nodeItem.querySelector('.node-content');
+        const toggleIcon = toggleButton.querySelector('.toggle-icon');
         
         if (nodeContent && toggleIcon) {
             const isCollapsed = nodeContent.style.display === 'none';
@@ -702,12 +706,12 @@ class DialogueEditor {
                 // 展开
                 nodeContent.style.display = 'block';
                 toggleIcon.textContent = '▼';
-                nodeContent.closest('.node-item').classList.remove('collapsed');
+                nodeItem.classList.remove('collapsed');
             } else {
                 // 收起
                 nodeContent.style.display = 'none';
                 toggleIcon.textContent = '▶';
-                nodeContent.closest('.node-item').classList.add('collapsed');
+                nodeItem.classList.add('collapsed');
             }
         }
     }
